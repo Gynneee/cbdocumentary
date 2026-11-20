@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>MarineLog</title>
+  <title>Pramuka Island — Weather & Marine Tide</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,19 +13,21 @@
 
   <!--
     URL options (all optional), e.g. pramuka-weather-tide.html?t=07:55&play=0
-      t=HH:MM     starting clock time (default 07:58)
+      t=HH:MM[:SS] starting clock time (default 08:00:00)
       play=0      start paused
-      speed=N     sim speed in x real time (default 60)
-      start=HH:MM slack window start (default 08:00)
+      speed=N     sim speed in x real time (default 3)
+      start=HH:MM slack window start (default 08:01)
       len=N       slack window length in minutes (default 45)
       gps=0       skip real GPS and use the simulated approach only
       dest=lat,lon override the destination (default: Sector 04 site)
+      land=MODE   transport before the boat: train|car|bus|moto|walk|none (default train)
       ui=1        keep the control bar visible (otherwise it fades after 5s)
+      clean=1     hide the control bar completely (for filming; Space = pause, R = restart)
   -->
 
   <style>
     /* Layout concept: one landscape screen, three columns, two rows of glass cards.
-       Hero + slack window | tide chart + hourly strip | compass + ambient. */
+       Hero | slack window | compass, then route map | tide chart | ambient. */
     :root {
       --sky-top: #6E92B8;
       --sky-mid: #8BAAC9;
@@ -141,13 +143,13 @@
     .grid {
       min-height: 0; display: grid; gap: .7rem;
       grid-template-columns: minmax(0, .85fr) minmax(0, 1.6fr) minmax(0, .95fr);
-      grid-template-rows: minmax(0, 1.65fr) minmax(0, 1fr);
-      grid-template-areas: "hero tide compass" "window hourly ambient";
+      grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
+      grid-template-areas: "hero win compass" "map tide ambient";
     }
     .hero { grid-area: hero; padding: 1rem 1.1rem; }
-    .window { grid-area: window; justify-content: space-between; }
+    .window { grid-area: win; justify-content: space-between; padding: 1.1rem 1.3rem; }
     .tide { grid-area: tide; }
-    .hourly { grid-area: hourly; }
+    .map { grid-area: map; }
     .compass { grid-area: compass; }
     .ambient { grid-area: ambient; }
 
@@ -167,12 +169,12 @@
     .pill { font-size: .66rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: .22rem .6rem; border-radius: 99px; border: 1px solid rgba(255,255,255,.5); color: #fff; white-space: nowrap; transition: background-color .3s, color .3s; }
     .pill.open { background: var(--amber); border-color: var(--amber); color: #2B2300; }
     .pill.closed { background: rgba(127,214,208,.24); border-color: var(--teal); color: #E8FFFC; }
-    .win-range { display: flex; align-items: baseline; gap: .5rem; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
-    .win-range span { font-size: .8rem; color: var(--text-3); }
-    .win-count { display: flex; align-items: baseline; gap: .5rem; }
-    .win-count b { font-size: 2.6rem; font-weight: 300; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-    .win-count span { font-size: .8rem; color: var(--text-2); }
-    .win-bar { height: .36rem; border-radius: 99px; background: rgba(255,255,255,.2); overflow: hidden; }
+    .win-range { display: flex; align-items: baseline; gap: .6rem; font-size: 1.9rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .win-range span { font-size: 1rem; font-weight: 400; color: var(--text-3); }
+    .win-count { display: flex; flex-direction: column; gap: .4rem; }
+    .win-count b { font-size: 8.5rem; font-weight: 300; line-height: .95; letter-spacing: -.045em; margin-left: -.2rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .win-count span { font-size: 1.05rem; color: var(--text-2); }
+    .win-bar { height: .6rem; border-radius: 99px; background: rgba(255,255,255,.2); overflow: hidden; }
     .win-bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--amber); transition: width .12s linear; }
     .dist-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .35rem; }
     .dist-head b { font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -183,6 +185,55 @@
     .dist-track.arrived .dist-fill { background: var(--teal); }
     .dist-track.arrived .dist-pin { background: var(--teal); box-shadow: 0 0 .6rem rgba(127,214,208,.6); }
     .dist-meta { display: flex; justify-content: space-between; font-size: .72rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+    .window .win-count b { font-size: 7.2rem; }
+    .dist-seg { position: absolute; top: -.25rem; bottom: -.25rem; width: 2px; margin-left: -1px; background: rgba(255,255,255,.75); border-radius: 2px; }
+    .dist-fill, .dist-pin { display: block; }
+    /* ---------- Journey legs (transport before the boat) ---------- */
+    .legs { flex: 0 0 auto; display: flex; align-items: center; gap: .35rem; margin-bottom: .45rem; }
+    .leg { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: .05rem; padding: .3rem .55rem; border-radius: .7rem; border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.08); color: #fff; text-align: left; font: inherit; cursor: pointer; transition: background-color .3s, border-color .3s; }
+    div.leg { cursor: default; }
+    .leg b { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .leg span { font-size: .7rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .leg.on { background: rgba(250,204,21,.2); border-color: var(--amber); }
+    .leg-arrow { font-style: normal; color: var(--text-3); flex: 0 0 auto; }
+    .leg-panel { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(8,24,48,.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .leg-panel[hidden] { display: none; }
+    .leg-box { width: min(34rem, 92vw); display: flex; flex-direction: column; gap: .8rem; padding: 1.2rem; border-radius: 1.25rem; background: rgba(16,42,78,.85); border: 1px solid var(--glass-border); }
+    .modes { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .leg-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .leg-fields label { display: flex; flex-direction: column; gap: .25rem; }
+    .leg-box input { width: 100%; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4); border-radius: .6rem; color: #fff; padding: .45rem .65rem; font: 500 .95rem 'Inter', sans-serif; user-select: text; -webkit-user-select: text; }
+    .leg-note { font-size: .7rem; color: var(--text-3); }
+    /* radar beacon behind the boat */
+    .radar { transition: opacity .4s; }
+    .rr { fill: rgba(250,204,21,.16); stroke: rgba(250,204,21,.75); stroke-width: 1; transform-box: fill-box; transform-origin: center; animation: radarPing 2.7s ease-out infinite; }
+    @keyframes radarPing { 0% { transform: scale(.15); opacity: .95; } 100% { transform: scale(1); opacity: 0; } }
+    .map.onland #boatG { opacity: .45; }
+    .map.onland .radar { opacity: 0; }
+    #boatG { transition: transform .35s linear, opacity .4s; }
+    /* ---------- Route map ---------- */
+    .map-wrap { position: relative; flex: 1 1 auto; min-height: 0; border-radius: .9rem; overflow: hidden; background: rgba(255,255,255,.07); }
+    .map-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .m-grid { fill: none; stroke: rgba(255,255,255,.14); stroke-width: 1; }
+    .m-contour { fill: none; stroke: rgba(255,255,255,.13); stroke-width: 1.2; }
+    .m-reef { fill: rgba(255,255,255,.1); stroke: rgba(255,255,255,.5); stroke-width: 1.2; stroke-dasharray: 3 4; }
+    .m-sand { fill: #EADFBF; }
+    .m-green { fill: #7DB38A; }
+    .m-jetty { stroke: #fff; stroke-width: 3; stroke-linecap: round; }
+    .m-route { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; }
+    .m-done { fill: none; stroke: var(--amber); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .35s linear; }
+    .m-pin { fill: var(--amber); stroke: #fff; stroke-width: 1.6; }
+    .m-pulse { fill: rgba(250,204,21,.35); transform-box: fill-box; transform-origin: center; animation: halo 2s ease-out infinite; }
+    .m-label { fill: #fff; font-size: 11px; font-weight: 600; }
+    .m-label.sm { fill: var(--amber); font-size: 9.5px; font-weight: 700; letter-spacing: .06em; }
+    #boatG { transition: transform .35s linear; }
+    .boat-bob { animation: boatBob 1.8s ease-in-out infinite; }
+    @keyframes boatBob { 0%, 100% { transform: translateY(-1px); } 50% { transform: translateY(1.2px); } }
+    .wake { fill: none; stroke: rgba(255,255,255,.8); stroke-width: 1.3; stroke-linecap: round; animation: wakePulse 1.4s ease-out infinite; }
+    @keyframes wakePulse { 0% { opacity: .9; } 100% { opacity: .15; } }
+    .map.arrived .m-pin { fill: var(--teal); }
+    .map.arrived .m-done { stroke: var(--teal); }
+
     .window.flash-open { animation: openGlow 1.6s ease-out; }
     @keyframes openGlow { 0% { box-shadow: 0 0 0 0 rgba(250,204,21,.9), inset 0 0 0 2px rgba(250,204,21,.9); } 100% { box-shadow: 0 0 0 1.4rem rgba(250,204,21,0), inset 0 0 0 2px rgba(250,204,21,0); } }
 
@@ -272,6 +323,7 @@
       transition: opacity .6s ease;
     }
     .controls.idle { opacity: 0; pointer-events: none; }
+    body.clean .controls { display: none; }
     .ctl-btn { width: 2.1rem; height: 2.1rem; flex: 0 0 auto; border: 0; border-radius: 50%; background: rgba(255,255,255,.24); color: #fff; display: grid; place-items: center; cursor: pointer; }
     .ctl-btn svg { width: 1rem; height: 1rem; fill: currentColor; }
     .ctl-chip { flex: 0 0 auto; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; border-radius: 99px; padding: .3rem .75rem; font: 600 .76rem 'Inter', sans-serif; letter-spacing: .02em; cursor: pointer; font-variant-numeric: tabular-nums; }
@@ -293,18 +345,19 @@
       html, body { overflow: auto; height: auto; max-height: none; min-height: 100dvh; }
       .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
       .topbar { flex-wrap: wrap; }
-      .grid { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "hero" "window" "tide" "hourly" "compass" "ambient"; }
+      .grid { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "hero" "win" "tide" "map" "compass" "ambient"; }
       .hero { min-height: 24rem; }
       .window { gap: .8rem; }
       .tide { height: 22rem; }
-      .hourly { height: 16rem; }
+      .map { height: 22rem; }
+      .window { min-height: 22rem; }
       .compass { height: 30rem; }
       .ambient { height: 17rem; }
       .controls { position: sticky; bottom: .5rem; }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut { animation: none; }
+      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut, .boat-bob, .wake, .m-pulse, .rr { animation: none; }
     }
   </style>
 </head>
@@ -420,29 +473,60 @@
         </div>
       </article>
 
-      <!-- SLACK WINDOW + DISTANCE TO SITE -->
+      <!-- SLACK WINDOW (middle, big) -->
       <article class="card window" id="winCard">
         <div class="card-head" style="margin-bottom:0">
-          <span class="eyebrow">Slack window</span>
+          <span class="eyebrow">Slack window · Sector 04</span>
           <span id="winPill" class="pill">Standby</span>
         </div>
-        <div class="win-range"><b id="winRange">08:00 – 08:45</b><span id="winLen">45 min</span></div>
         <div class="win-count"><b id="winCount">00:00</b><span id="winCountLabel">until window opens</span></div>
-        <div class="win-bar"><i id="winFill"></i></div>
         <div>
-          <div class="dist-head"><span class="eyebrow">Distance to site</span><b id="distVal">180 m</b></div>
-          <div id="distTrack" class="dist-track"><i id="distFill" class="dist-fill"></i><i class="dist-pin"></i><i id="distBoat" class="dist-boat"></i></div>
-          <div class="dist-meta"><span id="distSrc">Simulated</span><span id="distEta">ETA --</span></div>
+          <div class="win-range"><b id="winRange">08:01 – 08:46</b><span id="winLen">45 min</span></div>
+          <div class="win-bar" style="margin-top:.7rem"><i id="winFill"></i></div>
+        </div>
+        <div>
+          <div class="dist-head"><span class="eyebrow" id="dLeg">Distance to site</span><b id="dRem">--</b></div>
+          <div class="dist-track" id="dTrack"><i class="dist-fill" id="dFill"></i><i class="dist-seg" id="dSeg"></i><span class="dist-pin"></span><span class="dist-boat" id="dBoat"></span></div>
+          <div class="dist-meta"><span id="dA">--</span><span id="dB"></span><span id="dC">Pramuka</span></div>
+        </div>
+        <div class="stats" style="grid-template-columns:repeat(3,1fr);margin-top:0">
+          <div class="stat"><span class="eyebrow">Phase</span><b id="winPhase">--</b><small id="winPhaseSub">--</small></div>
+          <div class="stat"><span class="eyebrow">Tide</span><b id="winTide">--</b><small id="winTideSub">--</small></div>
+          <div class="stat"><span class="eyebrow">Current</span><b id="winCur">--</b><small id="winCurSub">--</small></div>
         </div>
       </article>
 
-      <!-- HOURLY -->
-      <article class="card hourly">
+      <!-- ROUTE MAP: boat heads for the island as the distance shrinks -->
+      <article class="card map" id="mapCard">
         <div class="card-head">
-          <span class="eyebrow">Hourly · air °C · wind kt · tide m</span>
-          <span id="hourlySummary" class="eyebrow" style="color:var(--text-2)"></span>
+          <span class="eyebrow">Route · to site</span>
+          <div class="tide-read"><b id="distVal">900 m</b></div>
         </div>
-        <div id="hourlyTrack" class="hourly-track"></div>
+        <div class="map-wrap">
+          <svg viewBox="0 0 260 190" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Route map: boat approaching Pramuka Island">
+            <path class="m-grid" d="M65 0V190M130 0V190M195 0V190M0 47H260M0 95H260M0 142H260" />
+            <path class="m-contour" d="M0 150C50 138 96 164 150 150S230 152 260 140M0 122C46 110 84 128 128 114" />
+            <g transform="translate(-10 0)">
+              <ellipse class="m-reef" cx="206" cy="60" rx="52" ry="42" />
+              <path class="m-sand" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" />
+              <path class="m-green" d="M184 62C184 48 202 42 216 46C232 50 234 62 226 70C216 78 194 76 188 70Z" />
+            </g>
+            <text class="m-label" x="196" y="114" text-anchor="middle">Pramuka Island</text>
+            <path class="m-jetty" d="M156 84L166 78" />
+            <path id="routeBase" class="m-route" d="M26 162C66 176 112 118 156 84" />
+            <path id="routeDone" class="m-done" d="M26 162C66 176 112 118 156 84" />
+            <circle cx="26" cy="162" r="3.5" fill="none" stroke="#fff" stroke-width="1.6" />
+            <g transform="translate(156 84)"><circle class="m-pulse" r="8" /><circle class="m-pin" r="4" /></g>
+            <text class="m-label sm" x="140" y="76" text-anchor="end">SECTOR 04</text>
+            <g id="boatG"><g class="radar"><circle class="rr" r="30" /><circle class="rr" r="30" style="animation-delay:-.9s" /><circle class="rr" r="30" style="animation-delay:-1.8s" /></g><g class="boat-bob"><g transform="scale(1.35)">
+              <path class="wake" d="M-9 -2L-22 -6" /><path class="wake" d="M-9 2L-22 6" />
+              <path d="M-9 0L-7 -4.2H6L12 0L6 4.2H-7Z" fill="#fff" stroke="rgba(20,50,80,.5)" stroke-width=".8" />
+              <rect x="-4" y="-2.6" width="6.5" height="5.2" rx="1.2" fill="#4F8A8B" />
+              <circle cx="9" cy="0" r="1" fill="#D99B52" />
+            </g></g></g>
+          </svg>
+        </div>
+        <div class="dist-meta" style="margin-top:.5rem"><span id="distSrc">Simulated</span><span id="distEta">ETA --</span></div>
       </article>
 
       <!-- AMBIENT -->
@@ -468,11 +552,27 @@
         <input id="scrub" type="range" min="360" max="720" step="0.1" value="480" aria-label="Time of day" />
       </div>
       <span class="ctl-time">12:00</span>
+      <button id="btnTransport" class="ctl-chip" type="button">Transport</button>
       <button id="btnSensor" class="ctl-chip" type="button" aria-pressed="false">Sensor</button>
       <button id="btnRetake" class="ctl-chip" type="button">↺ Retake</button>
     </footer>
 
   </main>
+
+  <div id="legPanel" class="leg-panel" hidden>
+    <div class="leg-box">
+      <span class="eyebrow">Transport before the boat</span>
+      <div id="modes" class="modes"></div>
+      <div class="leg-fields">
+        <label><span class="eyebrow">From</span><input id="lgFrom" type="text" /></label>
+        <label><span class="eyebrow">To (boat departs here)</span><input id="lgTo" type="text" /></label>
+        <label><span class="eyebrow">Land leg · km</span><input id="lgKm" type="number" min="0" step="0.5" /></label>
+        <label><span class="eyebrow">Boat leg · km</span><input id="lgBKm" type="number" min="1" step="0.5" /></label>
+      </div>
+      <span class="leg-note">Speeds: train 55, car 40, bus 30, motorbike 40, walk 5, boat 28 km/h. The trip is timed to end when the slack window opens.</span>
+      <button id="lgDone" class="ctl-chip" type="button" style="align-self:flex-end">Done</button>
+    </div>
+  </div>
 
   <script>
     (function () {
@@ -483,17 +583,18 @@
       // =====================================================================
       const params = new URLSearchParams(location.search);
       function parseHM(s, fallback) {
-        const m = /^(\d{1,2}):(\d{2})$/.exec(s || '');
-        return m ? (+m[1]) * 60 + (+m[2]) : fallback;
+        const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s || '');
+        return m ? (+m[1]) * 60 + (+m[2]) + (+(m[3] || 0)) / 60 : fallback;
       }
       const CFG = {
-        windowStart: parseHM(params.get('start'), 8 * 60),
+        windowStart: parseHM(params.get('start'), 8 * 60 + 1),
         windowLen: Math.max(5, +params.get('len') || 45),
         gps: params.get('gps') !== '0',
-        simStart: parseHM(params.get('t'), 7 * 60 + 58),
-        speed: +params.get('speed') || 60,
+        simStart: parseHM(params.get('t'), 8 * 60),
+        speed: +params.get('speed') || 3,
         autoplay: params.get('play') !== '0',
-        alwaysUI: params.get('ui') === '1'
+        alwaysUI: params.get('ui') === '1',
+        clean: params.get('clean') === '1'
       };
       const DOM0 = 360, DOM1 = 720;
       const DEST = (function () {
@@ -624,9 +725,9 @@
       // 4. STATIC BUILD: distance/GPS, hourly, tiles, dial
       // =====================================================================
       // Distance to site: live GPS, with a clock-driven simulation as fallback
-      const SIM_LEAD_MIN = 30, SIM_START_M = 900;
+      const SIM_LEAD_MIN = 1, SIM_START_M = 900;
       const gps = { on: false, lastFix: 0, acc: 0, speed: null, dist: 0, startDist: 0, bearing: SITE_BRG };
-      const distEls = { val: $('distVal'), fill: $('distFill'), boat: $('distBoat'), track: $('distTrack'), src: $('distSrc'), eta: $('distEta') };
+      const distEls = { val: $('distVal'), src: $('distSrc'), eta: $('distEta') };
       const rad = (d) => d * Math.PI / 180;
       function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m'; }
       function geoCalc(lat, lon) {
@@ -642,64 +743,103 @@
           gps.dist = g.dist; gps.bearing = g.brg; gps.startDist = Math.max(gps.startDist, g.dist);
         }, () => {}, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
       }
+      // ---- Journey: optional land leg (train, car...) before the boat ----
+      const MODES = { none: { n: 'None', v: 0 }, train: { n: 'Train', v: 55 }, car: { n: 'Car', v: 40 }, bus: { n: 'Bus', v: 30 }, moto: { n: 'Motorbike', v: 40 }, walk: { n: 'Walk', v: 5 } };
+      const BOAT_KMH = 28, APPROACH_M = 900;
+      const J = { mode: MODES[params.get('land')] ? params.get('land') : 'train', from: 'Sentul', to: 'Jakarta', landKm: 45, boatKm: 45 };
+      const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      function jCalc() {
+        const land = J.mode !== 'none' && J.landKm > 0;
+        const lk = land ? J.landKm : 0, bk = Math.max(1, J.boatKm);
+        const tl = land ? lk / MODES[J.mode].v * 60 : 0, tb = bk / BOAT_KMH * 60;
+        return { land: land, lk: lk, bk: bk, tl: tl, tb: tb, tot: lk + bk, start: WIN_S - tl - tb };
+      }
+      const btnTransport = $('btnTransport'), dEls = { leg: $('dLeg'), rem: $('dRem'), fill: $('dFill'), boat: $('dBoat'), track: $('dTrack'), seg: $('dSeg'), a: $('dA'), b: $('dB') };
+      function renderLegs() {
+        const c = jCalc();
+        setText(btnTransport, 'Transport · ' + (c.land ? MODES[J.mode].n : 'None'));
+        setText(dEls.a, c.land ? J.from : J.to);
+        setText(dEls.b, c.land ? J.to : '');
+        dEls.seg.style.display = c.land ? '' : 'none';
+      }
+      const panel = $('legPanel'), modesEl = $('modes');
+      function buildModes() {
+        modesEl.innerHTML = Object.keys(MODES).map((k) => '<button type="button" class="ctl-chip" data-m="' + k + '" aria-pressed="' + (J.mode === k) + '">' + MODES[k].n + '</button>').join('');
+      }
+      modesEl.addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) { J.mode = b.dataset.m; buildModes(); } });
+      btnTransport.addEventListener('click', () => {
+        wake();
+        $('lgFrom').value = J.from; $('lgTo').value = J.to; $('lgKm').value = J.landKm; $('lgBKm').value = J.boatKm;
+        buildModes(); panel.hidden = false;
+      });
+      $('lgDone').addEventListener('click', () => {
+        J.from = $('lgFrom').value.trim() || 'Start'; J.to = $('lgTo').value.trim() || 'Jakarta';
+        J.landKm = Math.max(0, +$('lgKm').value || 0); J.boatKm = Math.max(1, +$('lgBKm').value || 45);
+        panel.hidden = true; renderLegs(); update();
+      });
+      renderLegs();
+
       function updateDistance(m) {
-        const live = gps.on && performance.now() - gps.lastFix < 20000;
-        let dist, prog, eta = null, brg = SITE_BRG, arriveR = 0;
+        const c = jCalc(), live = gps.on && performance.now() - gps.lastFix < 20000;
+        let remM, totM, mapProg, eta = null, arriveR = 0, onLand, brg = SITE_BRG;
         if (live) {
-          arriveR = Math.max(10, gps.acc);
-          dist = gps.dist; brg = gps.bearing;
-          prog = gps.startDist > arriveR ? clamp(1 - dist / gps.startDist, 0, 1) : 1;
-          if (gps.speed > 0.5) eta = dist / gps.speed;
+          arriveR = Math.max(10, gps.acc); brg = gps.bearing;
+          remM = gps.dist; totM = Math.max(gps.startDist, remM, 1);
+          mapProg = gps.startDist > arriveR ? clamp(1 - remM / gps.startDist, 0, 1) : 1;
+          if (gps.speed > 0.5) eta = remM / gps.speed;
+          onLand = c.land && remM > c.bk * 1000;
         } else {
-          dist = SIM_START_M * clamp((WIN_S - m) / SIM_LEAD_MIN, 0, 1);
-          prog = 1 - dist / SIM_START_M;
+          const done = clamp(m - c.start, 0, c.tl + c.tb);
+          const covKm = done <= c.tl ? (c.tl ? done / c.tl * c.lk : 0) : c.lk + (done - c.tl) / c.tb * c.bk;
+          totM = c.tot * 1000; remM = m >= WIN_S ? 0 : Math.max(0, totM - covKm * 1000);
+          mapProg = 1 - clamp(remM / APPROACH_M, 0, 1); // map = final approach only
           eta = Math.max(0, WIN_S - m) * 60;
+          onLand = c.land && done < c.tl;
         }
-        const arrived = dist <= arriveR;
-        if (arrived) prog = 1;
-        setText(distEls.val, arrived ? 'On site' : fmtDist(dist));
-        distEls.fill.style.width = (prog * 100).toFixed(1) + '%';
-        distEls.boat.style.left = (prog * 100).toFixed(1) + '%';
-        distEls.track.classList.toggle('arrived', arrived);
+        const arrived = remM <= arriveR;
+        if (arrived) mapProg = 1;
+        const prog = arrived ? 1 : clamp(1 - remM / totM, 0, 1);
+        setText(distEls.val, arrived ? 'On site' : fmtDist(remM));
+        mapSet(mapProg, arrived, onLand);
         setText(distEls.src, live ? 'GPS · ±' + Math.round(gps.acc) + ' m' : (gps.on ? 'GPS lost · simulated' : 'Simulated'));
         setText(distEls.eta, arrived ? 'Arrived' : (eta !== null ? 'ETA ' + cd(eta) : 'ETA --'));
+        // slack-window distance bar
+        const pct = (prog * 100).toFixed(2) + '%';
+        dEls.fill.style.width = pct; dEls.boat.style.left = pct;
+        dEls.track.classList.toggle('arrived', arrived);
+        dEls.seg.style.left = (c.land ? clamp(1 - c.bk * 1000 / totM, 0, 1) * 100 : 0).toFixed(2) + '%';
+        setText(dEls.rem, arrived ? 'On site' : fmtDist(remM) + ' left');
+        setText(dEls.leg, arrived ? 'Arrived · Sector 04' : (onLand ? MODES[J.mode].n + ' · ' + J.from + ' → ' + J.to : 'Boat · ' + J.to + ' → Pramuka'));
         // compass: site marker + stat follow the real bearing
         const sg = $('siteG'); if (sg) sg.setAttribute('transform', 'rotate(' + brg.toFixed(1) + ')');
         setText(el.siteBrg, deg3(brg) + '°');
-        setText($('siteSub'), fmtDist(dist) + ' · ' + card16(brg));
-        return { dist: dist, arrived: arrived };
+        setText($('siteSub'), fmtDist(remM) + ' · ' + card16(brg));
+        return { dist: remM, arrived: arrived };
       }
 
       // Window labels
       setText($('winRange'), hm(WIN_S) + ' – ' + hm(WIN_E));
       setText($('winLen'), CFG.windowLen + ' min');
 
-      // Hourly columns 6 AM .. 12 PM
-      const hourlyTrack = $('hourlyTrack');
-      const hourCols = [];
       const HOURS = [6, 7, 8, 9, 10, 11, 12];
-      HOURS.forEach((h) => {
-        const m = h * 60;
-        const col = document.createElement('div');
-        const inWin = m + 60 > WIN_S && m < WIN_E;
-        col.className = 'hour-col' + (inWin ? ' win' : '');
-        const icon = h === 6 ? 'sunrise' : (h === 7 ? 'partly' : 'sun');
-        const wind = curve(D.wind, 5, m);
-        col.innerHTML =
-          '<span class="hour-time">' + hour12(h) + '</span>' +
-          iconSvg(icon) +
-          '<span class="hour-temp">' + Math.round(curve(D.air, 5, m)) + '°</span>' +
-          '<div class="hour-wind"><div class="wbar"><i style="height:' + Math.round(clamp(wind / 14, 0.08, 1) * 100) + '%"></i></div><span class="hour-kt">' + Math.round(wind) + ' kt</span></div>' +
-          '<div class="hour-tide"><svg viewBox="0 0 12 14" fill="currentColor"><path d="M6 1.2C6 1.2 1.5 6.3 1.5 9.3a4.5 4.5 0 0 0 9 0C10.5 6.3 6 1.2 6 1.2z" /></svg><span>' + tideAt(m).toFixed(1) + ' m</span></div>';
-        col.addEventListener('click', () => {
-          state.sim = Math.min(m, DOM1 - 0.1);
-          if (inWin && m <= WIN_S + 30) flash();
-          wake();
-          update();
-        });
-        hourlyTrack.appendChild(col);
-        hourCols.push(col);
-      });
+
+      // Window stats inside the big slack window card
+      const wst = { phase: $('winPhase'), phaseSub: $('winPhaseSub'), tide: $('winTide'), tideSub: $('winTideSub'), cur: $('winCur'), curSub: $('winCurSub') };
+
+      // Route map: the boat follows the route as the distance to site shrinks
+      const routePath = $('routeBase'), routeDone = $('routeDone'), boatG = $('boatG'), mapCard = $('mapCard');
+      const routeLen = routePath.getTotalLength();
+      routeDone.style.strokeDasharray = routeLen;
+      function mapSet(prog, arrived, onLand) {
+        const L = routeLen * prog;
+        const p = routePath.getPointAtLength(L);
+        const a = routePath.getPointAtLength(Math.max(0, L - 1.5)), b = routePath.getPointAtLength(Math.min(routeLen, L + 1.5));
+        const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+        boatG.style.transform = 'translate(' + p.x.toFixed(1) + 'px, ' + p.y.toFixed(1) + 'px) rotate(' + ang.toFixed(1) + 'deg)';
+        routeDone.style.strokeDashoffset = (routeLen - L).toFixed(1);
+        mapCard.classList.toggle('arrived', arrived);
+        mapCard.classList.toggle('onland', !!onLand);
+      }
 
       const airHi = Math.round(Math.max.apply(null, HOURS.map((h) => curve(D.air, 5, h * 60))));
       const airLo = Math.round(Math.min.apply(null, HOURS.map((h) => curve(D.air, 5, h * 60))));
@@ -921,7 +1061,7 @@
         tideNow: $('tideNow'), tideTrend: $('tideTrend'),
         winCard: $('winCard'), winPill: $('winPill'), winCount: $('winCount'), winCountLabel: $('winCountLabel'), winFill: $('winFill'),
         windKt: $('windKt'), windSub: $('windSub'), gustKt: $('gustKt'), curKt: $('curKt'), curSub: $('curSub'), siteBrg: $('siteBrg'),
-        ambDelta: $('ambDelta'), hourlySummary: $('hourlySummary'),
+        ambDelta: $('ambDelta'),
         scrub: $('scrub'), scrubFill: $('scrubFill')
       };
 
@@ -984,6 +1124,8 @@
         if (el.winPill.className !== 'pill' + cls) el.winPill.className = 'pill' + cls;
         setText(el.winCount, count);
         setText(el.winCountLabel, label);
+        el.winCount.style.fontSize = count.length > 5 ? '5.5rem' : '';
+        el.winCount.style.color = (m >= WIN_S && m < WIN_E) ? 'var(--amber)' : '';
         el.winFill.style.width = (prog * 100).toFixed(1) + '%';
 
         if (state.prevPhase && state.prevPhase !== 'open' && ph.key === 'open') {
@@ -1000,10 +1142,13 @@
         setText(el.tideTrend, trend);
         updateChart(m, tide);
 
-        // Hourly highlight
-        const nearest = clamp(Math.round(m / 60), 6, 12);
-        hourCols.forEach((c, i) => c.classList.toggle('current', HOURS[i] === nearest));
-        setText(el.hourlySummary, ph.label + ' · ' + hm12(m));
+        // Window card stats
+        setText(wst.phase, ph.label);
+        setText(wst.phaseSub, hm12(m));
+        setText(wst.tide, tide.toFixed(2) + ' m');
+        setText(wst.tideSub, trend);
+        setText(wst.cur, cur.toFixed(1) + ' kt');
+        setText(wst.curSub, cur < 0.15 ? 'slack' : (slope > 0 ? 'flood' : 'ebb'));
 
         // Compass stats
         setText(el.windKt, wind.toFixed(1) + ' kt');
@@ -1036,6 +1181,7 @@
       // 8. CONTROLS
       // =====================================================================
       const controls = $('controls');
+      if (CFG.clean) document.body.classList.add('clean');
       const btnPlay = $('btnPlay'), playIcon = $('playIcon'), btnSpeed = $('btnSpeed');
       const ICON_PAUSE = 'M7 5h4v14H7zM13 5h4v14h-4z', ICON_PLAY = 'M8 5v14l11-7z';
 
@@ -1074,6 +1220,7 @@
       el.scrub.addEventListener('input', () => { state.sim = clamp(parseFloat(el.scrub.value), DOM0, DOM1 - 0.1); update(); });
 
       window.addEventListener('keydown', (e) => {
+        if (e.target && e.target.tagName === 'INPUT') return;
         if (e.code === 'Space') { e.preventDefault(); btnPlay.click(); }
         else if (e.code === 'ArrowRight') { state.sim = clamp(state.sim + 5, DOM0, DOM1 - 0.1); update(); }
         else if (e.code === 'ArrowLeft') { state.sim = clamp(state.sim - 5, DOM0, DOM1 - 0.1); update(); }
