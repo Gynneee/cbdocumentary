@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Pramuka Island — Weather & Marine Tide</title>
+  <title>MarineLog</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,11 +15,12 @@
     URL options (all optional), e.g. pramuka-weather-tide.html?t=07:55&play=0
       t=HH:MM[:SS] starting clock time (default 08:00:00)
       play=0      start paused
-      speed=N     sim speed in x real time (default 3)
+      speed=N     sim speed in x real time (default 1)
       start=HH:MM slack window start (default 08:01)
       len=N       slack window length in minutes (default 45)
       gps=0       skip real GPS and use the simulated approach only
       dest=lat,lon override the destination (default: Sector 04 site)
+      sim=0       start in live-GPS mode instead of simulation (the Sim button toggles it)
       land=MODE   transport before the boat: train|car|bus|moto|walk|none (default train)
       ui=1        keep the control bar visible (otherwise it fades after 5s)
       clean=1     hide the control bar completely (for filming; Space = pause, R = restart)
@@ -40,6 +41,7 @@
       --amber: #FACC15;
       --coral: #FF9B8A;
       --teal: #7FD6D0;
+      --trace: #FFF1A8;
       --sea-y: 4vh;
       font-size: clamp(13px, min(1.75vh, 1.3vw), 17px);
     }
@@ -205,6 +207,14 @@
     .leg-box input { width: 100%; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4); border-radius: .6rem; color: #fff; padding: .45rem .65rem; font: 500 .95rem 'Inter', sans-serif; user-select: text; -webkit-user-select: text; }
     .leg-note { font-size: .7rem; color: var(--text-3); }
     /* radar beacon behind the boat */
+    .b-land { fill: rgba(255,255,255,.12); stroke: #fff; stroke-width: 1.3; stroke-linejoin: round; }
+    .b-topo { fill: none; stroke: rgba(255,255,255,.5); stroke-width: .8; stroke-linejoin: round; }
+    .b-topo.faint { stroke: rgba(255,255,255,.28); }
+    .b-inner { fill: none; stroke: rgba(255,255,255,.5); stroke-width: .8; stroke-dasharray: 2 2; }
+    .b-ret { fill: none; stroke: var(--amber); stroke-width: 1; }
+    .b-spin { transform-box: fill-box; transform-origin: center; animation: retSpin 24s linear infinite; }
+    @keyframes retSpin { to { transform: rotate(360deg); } }
+    .m-label.tac { font-size: 8.5px; letter-spacing: .18em; }
     .radar { transition: opacity .4s; }
     .rr { fill: rgba(250,204,21,.16); stroke: rgba(250,204,21,.75); stroke-width: 1; transform-box: fill-box; transform-origin: center; animation: radarPing 2.7s ease-out infinite; }
     @keyframes radarPing { 0% { transform: scale(.15); opacity: .95; } 100% { transform: scale(1); opacity: 0; } }
@@ -221,7 +231,7 @@
     .m-green { fill: #7DB38A; }
     .m-jetty { stroke: #fff; stroke-width: 3; stroke-linecap: round; }
     .m-route { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; }
-    .m-done { fill: none; stroke: var(--amber); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .35s linear; }
+    .m-done { fill: none; stroke: var(--trace); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset .35s linear; }
     .m-pin { fill: var(--amber); stroke: #fff; stroke-width: 1.6; }
     .m-pulse { fill: rgba(250,204,21,.35); transform-box: fill-box; transform-origin: center; animation: halo 2s ease-out infinite; }
     .m-label { fill: #fff; font-size: 11px; font-weight: 600; }
@@ -357,7 +367,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut, .boat-bob, .wake, .m-pulse, .rr { animation: none; }
+      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut, .boat-bob, .wake, .m-pulse, .rr, .b-spin { animation: none; }
     }
   </style>
 </head>
@@ -508,10 +518,13 @@
             <path class="m-contour" d="M0 150C50 138 96 164 150 150S230 152 260 140M0 122C46 110 84 128 128 114" />
             <g transform="translate(-10 0)">
               <ellipse class="m-reef" cx="206" cy="60" rx="52" ry="42" />
-              <path class="m-sand" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" />
-              <path class="m-green" d="M184 62C184 48 202 42 216 46C232 50 234 62 226 70C216 78 194 76 188 70Z" />
+              <path class="b-topo faint" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" transform="translate(205 58) scale(1.2) translate(-205 -58)" />
+              <path class="b-land" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" />
+              <path class="b-topo" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" transform="translate(206 59) scale(0.8) translate(-205 -58)" />
+              <path class="b-topo" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" transform="translate(207 60) scale(0.58) translate(-205 -58)" />
+              <path class="b-topo" d="M172 62C168 42 190 28 214 32C238 36 248 54 238 72C230 86 196 90 180 80C174 76 172 68 172 62Z" transform="translate(208 60) scale(0.36) translate(-205 -58)" />
             </g>
-            <text class="m-label" x="196" y="114" text-anchor="middle">Pramuka Island</text>
+            <text class="m-label tac" x="196" y="114" text-anchor="middle">PRAMUKA ISLAND</text>
             <path class="m-jetty" d="M156 84L166 78" />
             <path id="routeBase" class="m-route" d="M26 162C66 176 112 118 156 84" />
             <path id="routeDone" class="m-done" d="M26 162C66 176 112 118 156 84" />
@@ -552,6 +565,7 @@
         <input id="scrub" type="range" min="360" max="720" step="0.1" value="480" aria-label="Time of day" />
       </div>
       <span class="ctl-time">12:00</span>
+      <button id="btnSim" class="ctl-chip" type="button" aria-pressed="true">Sim · On</button>
       <button id="btnTransport" class="ctl-chip" type="button">Transport</button>
       <button id="btnSensor" class="ctl-chip" type="button" aria-pressed="false">Sensor</button>
       <button id="btnRetake" class="ctl-chip" type="button">↺ Retake</button>
@@ -591,7 +605,7 @@
         windowLen: Math.max(5, +params.get('len') || 45),
         gps: params.get('gps') !== '0',
         simStart: parseHM(params.get('t'), 8 * 60),
-        speed: +params.get('speed') || 3,
+        speed: +params.get('speed') || 1,
         autoplay: params.get('play') !== '0',
         alwaysUI: params.get('ui') === '1',
         clean: params.get('clean') === '1'
@@ -710,7 +724,8 @@
         last: performance.now(),
         dragging: false,
         prevPhase: null,
-        prevFrag: -1
+        prevFrag: -1,
+        simMode: params.get('sim') !== '0'
       };
 
       const root = document.documentElement;
@@ -780,7 +795,7 @@
       renderLegs();
 
       function updateDistance(m) {
-        const c = jCalc(), live = gps.on && performance.now() - gps.lastFix < 20000;
+        const c = jCalc(), live = !state.simMode && gps.on && performance.now() - gps.lastFix < 20000;
         let remM, totM, mapProg, eta = null, arriveR = 0, onLand, brg = SITE_BRG;
         if (live) {
           arriveR = Math.max(10, gps.acc); brg = gps.bearing;
@@ -801,7 +816,7 @@
         const prog = arrived ? 1 : clamp(1 - remM / totM, 0, 1);
         setText(distEls.val, arrived ? 'On site' : fmtDist(remM));
         mapSet(mapProg, arrived, onLand);
-        setText(distEls.src, live ? 'GPS · ±' + Math.round(gps.acc) + ' m' : (gps.on ? 'GPS lost · simulated' : 'Simulated'));
+        setText(distEls.src, live ? 'GPS · ±' + Math.round(gps.acc) + ' m' : (gps.on && !state.simMode ? 'GPS lost · simulated' : 'Simulated'));
         setText(distEls.eta, arrived ? 'Arrived' : (eta !== null ? 'ETA ' + cd(eta) : 'ETA --'));
         // slack-window distance bar
         const pct = (prog * 100).toFixed(2) + '%';
@@ -1205,6 +1220,12 @@
         state.speed = SPEEDS[(i + 1) % SPEEDS.length];
         syncPlayUI(); wake();
       });
+      const btnSim = $('btnSim');
+      function syncSimBtn() {
+        setText(btnSim, state.simMode ? 'Sim · On' : 'GPS · Live');
+        btnSim.setAttribute('aria-pressed', state.simMode ? 'true' : 'false');
+      }
+      btnSim.addEventListener('click', () => { state.simMode = !state.simMode; syncSimBtn(); update(); wake(); });
       function retake() {
         state.sim = clamp(CFG.simStart, DOM0, DOM1 - 0.1);
         state.playing = true;
@@ -1255,6 +1276,7 @@
       }
 
       syncPlayUI();
+      syncSimBtn();
       wake();
       buildChart();
       update();
