@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Pramuka Island — Weather & Marine Tide</title>
+  <title>MarineLog</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,7 +18,8 @@
       speed=N     sim speed in x real time (default 60)
       start=HH:MM slack window start (default 08:00)
       len=N       slack window length in minutes (default 45)
-      frags=N     number of coral fragments (default 20)
+      gps=0       skip real GPS and use the simulated approach only
+      dest=lat,lon override the destination (default: Sector 04 site)
       ui=1        keep the control bar visible (otherwise it fades after 5s)
   -->
 
@@ -132,21 +133,9 @@
     .loc-name { font-size: 1.45rem; font-weight: 500; letter-spacing: -.01em; line-height: 1.1; }
     .loc-sub { display: block; margin-top: .12rem; font-size: .76rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
-    .advisory { flex: 1 1 auto; flex-direction: row; align-items: center; gap: .75rem; padding: .42rem .9rem; border-radius: 1rem; cursor: pointer; transition: transform .15s ease; }
-    .advisory:active { transform: scale(.994); }
-    .adv-icon { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; color: var(--amber); }
-    .adv-main { min-width: 0; flex: 1; }
-    .adv-title { font-size: .66rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .adv-text { font-size: .95rem; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-    .adv-dots { display: flex; gap: .3rem; flex: 0 0 auto; }
-    .adv-dot { width: .38rem; height: .38rem; border-radius: 50%; background: rgba(255,255,255,.38); transition: background-color .25s, transform .25s; }
-    .adv-dot.active { background: #fff; transform: scale(1.2); }
-
-    .clock { flex: 0 0 auto; text-align: right; }
+    .clock { flex: 0 0 auto; margin-left: auto; text-align: right; }
     .clock-time { font-size: 1.5rem; font-weight: 300; letter-spacing: -.01em; line-height: 1.1; font-variant-numeric: tabular-nums; }
     .clock-sub { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; font-size: .76rem; color: var(--text-3); margin-top: .1rem; }
-    .live-dot { width: .42rem; height: .42rem; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 0 rgba(127,214,208,.7); animation: livePing 1.8s ease-out infinite; }
-    @keyframes livePing { 0% { box-shadow: 0 0 0 0 rgba(127,214,208,.65); } 100% { box-shadow: 0 0 0 .5rem rgba(127,214,208,0); } }
 
     /* ---------- Grid ---------- */
     .grid {
@@ -185,13 +174,15 @@
     .win-count span { font-size: .8rem; color: var(--text-2); }
     .win-bar { height: .36rem; border-radius: 99px; background: rgba(255,255,255,.2); overflow: hidden; }
     .win-bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--amber); transition: width .12s linear; }
-    .frag-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .35rem; }
-    .frag-head b { font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .frag-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: .28rem; }
-    .frag { aspect-ratio: 1; border-radius: 50%; border: 1.5px solid rgba(255,255,255,.42); transition: background-color .3s, box-shadow .3s, border-color .3s; }
-    .frag.on { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 .6rem rgba(250,204,21,.55); }
-    .frag.pop { animation: fragPop .7s cubic-bezier(.2, 1.4, .4, 1); }
-    @keyframes fragPop { 0% { transform: scale(.3); } 60% { transform: scale(1.4); } 100% { transform: scale(1); } }
+    .dist-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: .35rem; }
+    .dist-head b { font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .dist-track { position: relative; height: .5rem; margin: .7rem .55rem .6rem; border-radius: 99px; background: rgba(255,255,255,.2); }
+    .dist-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px; background: linear-gradient(90deg, rgba(255,255,255,.55), var(--amber)); transition: width .4s linear; }
+    .dist-pin { position: absolute; top: 50%; right: 0; width: .9rem; height: .9rem; margin: -.45rem -.45rem 0 0; border-radius: 50%; border: 2px solid #fff; background: var(--amber); box-shadow: 0 0 .6rem rgba(250,204,21,.55); }
+    .dist-boat { position: absolute; top: 50%; left: 0; width: 1.05rem; height: 1.05rem; margin: -.525rem 0 0 -.525rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.35); transition: left .4s linear; }
+    .dist-track.arrived .dist-fill { background: var(--teal); }
+    .dist-track.arrived .dist-pin { background: var(--teal); box-shadow: 0 0 .6rem rgba(127,214,208,.6); }
+    .dist-meta { display: flex; justify-content: space-between; font-size: .72rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
     .window.flash-open { animation: openGlow 1.6s ease-out; }
     @keyframes openGlow { 0% { box-shadow: 0 0 0 0 rgba(250,204,21,.9), inset 0 0 0 2px rgba(250,204,21,.9); } 100% { box-shadow: 0 0 0 1.4rem rgba(250,204,21,0), inset 0 0 0 2px rgba(250,204,21,0); } }
 
@@ -302,7 +293,6 @@
       html, body { overflow: auto; height: auto; max-height: none; min-height: 100dvh; }
       .app { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
       .topbar { flex-wrap: wrap; }
-      .advisory { flex-basis: 100%; order: 3; }
       .grid { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "hero" "window" "tide" "hourly" "compass" "ambient"; }
       .hero { min-height: 24rem; }
       .window { gap: .8rem; }
@@ -314,7 +304,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut, .live-dot { animation: none; }
+      .sun-wash, .mist-band, .wave, .sway-element, .c-halo, .c-line.fut { animation: none; }
     }
   </style>
 </head>
@@ -337,7 +327,7 @@
 
   <main class="app">
 
-    <!-- TOP BAR: location, rotating advisory, clock -->
+    <!-- TOP BAR: location, clock -->
     <header class="topbar">
       <div class="loc">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -350,20 +340,9 @@
         </div>
       </div>
 
-      <section id="advisoryCard" class="card advisory" aria-label="Marine and tide advisory">
-        <svg class="adv-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 3.2L2.4 19.8c-.4.7.1 1.6.9 1.6h17.4c.8 0 1.3-.9.9-1.6L12 3.2zm0 5.8c.6 0 1 .4 1 1v4.2c0 .6-.4 1-1 1s-1-.4-1-1V10c0-.6.4-1 1-1zm0 9.4a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z" />
-        </svg>
-        <div class="adv-main">
-          <div id="advTitle" class="adv-title">Slack tide window · Sector 04</div>
-          <div id="advText" class="adv-text"></div>
-        </div>
-        <div id="advDots" class="adv-dots"></div>
-      </section>
-
       <div class="clock">
         <div id="clockTime" class="clock-time">08:00:00</div>
-        <div class="clock-sub"><span class="live-dot"></span><span id="clockDate">WIB</span></div>
+        <div class="clock-sub"><span id="clockDate">WIB</span></div>
       </div>
     </header>
 
@@ -437,11 +416,11 @@
           <div class="stat"><span class="eyebrow">Wind</span><b id="windKt">4 kt</b><small id="windSub">WNW 292°</small></div>
           <div class="stat"><span class="eyebrow">Gust</span><b id="gustKt">7 kt</b><small>surface</small></div>
           <div class="stat"><span class="eyebrow">Current</span><b id="curKt">0.1 kt</b><small id="curSub">slack</small></div>
-          <div class="stat"><span class="eyebrow">Site</span><b id="siteBrg">047°</b><small>180 m · NE</small></div>
+          <div class="stat"><span class="eyebrow">Site</span><b id="siteBrg">047°</b><small id="siteSub">180 m · NE</small></div>
         </div>
       </article>
 
-      <!-- SLACK WINDOW + FRAGMENTS -->
+      <!-- SLACK WINDOW + DISTANCE TO SITE -->
       <article class="card window" id="winCard">
         <div class="card-head" style="margin-bottom:0">
           <span class="eyebrow">Slack window</span>
@@ -451,8 +430,9 @@
         <div class="win-count"><b id="winCount">00:00</b><span id="winCountLabel">until window opens</span></div>
         <div class="win-bar"><i id="winFill"></i></div>
         <div>
-          <div class="frag-head"><span class="eyebrow">Coral fragments</span><b id="fragCount">0 / 20</b></div>
-          <div id="fragGrid" class="frag-grid"></div>
+          <div class="dist-head"><span class="eyebrow">Distance to site</span><b id="distVal">180 m</b></div>
+          <div id="distTrack" class="dist-track"><i id="distFill" class="dist-fill"></i><i class="dist-pin"></i><i id="distBoat" class="dist-boat"></i></div>
+          <div class="dist-meta"><span id="distSrc">Simulated</span><span id="distEta">ETA --</span></div>
         </div>
       </article>
 
@@ -509,13 +489,17 @@
       const CFG = {
         windowStart: parseHM(params.get('start'), 8 * 60),
         windowLen: Math.max(5, +params.get('len') || 45),
-        fragments: Math.min(40, Math.max(1, Math.round(+params.get('frags') || 20))),
+        gps: params.get('gps') !== '0',
         simStart: parseHM(params.get('t'), 7 * 60 + 58),
         speed: +params.get('speed') || 60,
         autoplay: params.get('play') !== '0',
         alwaysUI: params.get('ui') === '1'
       };
       const DOM0 = 360, DOM1 = 720;
+      const DEST = (function () {
+        const p = (params.get('dest') || '').split(',').map(Number);
+        return p.length === 2 && p.every(isFinite) ? { lat: p[0], lon: p[1] } : { lat: -5.745833, lon: 106.614167 };
+      })();
       const SITE_BRG = 47;
       const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -625,8 +609,7 @@
         last: performance.now(),
         dragging: false,
         prevPhase: null,
-        prevFrag: -1,
-        advIdx: 0
+        prevFrag: -1
       };
 
       const root = document.documentElement;
@@ -638,18 +621,54 @@
       }
 
       // =====================================================================
-      // 4. STATIC BUILD: fragments, hourly, tiles, advisory dots, dial
+      // 4. STATIC BUILD: distance/GPS, hourly, tiles, dial
       // =====================================================================
-      // Fragments
-      const fragGrid = $('fragGrid');
-      const frags = [];
-      for (let i = 0; i < CFG.fragments; i++) {
-        const c = document.createElement('span');
-        c.className = 'frag';
-        fragGrid.appendChild(c);
-        frags.push(c);
+      // Distance to site: live GPS, with a clock-driven simulation as fallback
+      const SIM_LEAD_MIN = 30, SIM_START_M = 900;
+      const gps = { on: false, lastFix: 0, acc: 0, speed: null, dist: 0, startDist: 0, bearing: SITE_BRG };
+      const distEls = { val: $('distVal'), fill: $('distFill'), boat: $('distBoat'), track: $('distTrack'), src: $('distSrc'), eta: $('distEta') };
+      const rad = (d) => d * Math.PI / 180;
+      function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m'; }
+      function geoCalc(lat, lon) {
+        const p1 = rad(lat), p2 = rad(DEST.lat), dp = p2 - p1, dl = rad(DEST.lon - lon);
+        const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+        const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+        return { dist: 2 * 6371000 * Math.asin(Math.sqrt(a)), brg: (Math.atan2(y, x) * 180 / Math.PI + 360) % 360 };
       }
-      fragGrid.style.gridTemplateColumns = 'repeat(' + Math.min(10, CFG.fragments) + ', 1fr)';
+      if (CFG.gps && navigator.geolocation) {
+        navigator.geolocation.watchPosition((pos) => {
+          const c = pos.coords, g = geoCalc(c.latitude, c.longitude);
+          gps.on = true; gps.lastFix = performance.now(); gps.acc = c.accuracy || 0; gps.speed = c.speed;
+          gps.dist = g.dist; gps.bearing = g.brg; gps.startDist = Math.max(gps.startDist, g.dist);
+        }, () => {}, { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+      }
+      function updateDistance(m) {
+        const live = gps.on && performance.now() - gps.lastFix < 20000;
+        let dist, prog, eta = null, brg = SITE_BRG, arriveR = 0;
+        if (live) {
+          arriveR = Math.max(10, gps.acc);
+          dist = gps.dist; brg = gps.bearing;
+          prog = gps.startDist > arriveR ? clamp(1 - dist / gps.startDist, 0, 1) : 1;
+          if (gps.speed > 0.5) eta = dist / gps.speed;
+        } else {
+          dist = SIM_START_M * clamp((WIN_S - m) / SIM_LEAD_MIN, 0, 1);
+          prog = 1 - dist / SIM_START_M;
+          eta = Math.max(0, WIN_S - m) * 60;
+        }
+        const arrived = dist <= arriveR;
+        if (arrived) prog = 1;
+        setText(distEls.val, arrived ? 'On site' : fmtDist(dist));
+        distEls.fill.style.width = (prog * 100).toFixed(1) + '%';
+        distEls.boat.style.left = (prog * 100).toFixed(1) + '%';
+        distEls.track.classList.toggle('arrived', arrived);
+        setText(distEls.src, live ? 'GPS · ±' + Math.round(gps.acc) + ' m' : (gps.on ? 'GPS lost · simulated' : 'Simulated'));
+        setText(distEls.eta, arrived ? 'Arrived' : (eta !== null ? 'ETA ' + cd(eta) : 'ETA --'));
+        // compass: site marker + stat follow the real bearing
+        const sg = $('siteG'); if (sg) sg.setAttribute('transform', 'rotate(' + brg.toFixed(1) + ')');
+        setText(el.siteBrg, deg3(brg) + '°');
+        setText($('siteSub'), fmtDist(dist) + ' · ' + card16(brg));
+        return { dist: dist, arrived: arrived };
+      }
 
       // Window labels
       setText($('winRange'), hm(WIN_S) + ' – ' + hm(WIN_E));
@@ -708,17 +727,6 @@
         tileRefs[t.k] = { def: t, val: el.querySelector('b'), bar: el.querySelector('i') };
       });
 
-      // Advisory dots
-      const ADV_COUNT = 5;
-      const advDotsEl = $('advDots');
-      const advDots = [];
-      for (let i = 0; i < ADV_COUNT; i++) {
-        const d = document.createElement('span');
-        d.className = 'adv-dot' + (i === 0 ? ' active' : '');
-        advDotsEl.appendChild(d);
-        advDots.push(d);
-      }
-
       // Compass dial
       const dialSvg = $('dialSvg');
       (function buildDial() {
@@ -735,7 +743,7 @@
           s += '<text transform="rotate(' + a + ') translate(0 ' + (txt ? -76 : -78) + ')" dy="0.35em" text-anchor="middle" class="' + (txt ? 'd-card' + (a === 0 ? ' north' : '') : 'd-deg') + '">' + (txt || a) + '</text>';
         }
         // course line + site marker (fixed to the dial)
-        s += '<g transform="rotate(' + SITE_BRG + ')"><line x1="0" y1="-22" x2="0" y2="-76" class="d-course" /><path d="M0 -94 L5.5 -86.5 L0 -79 L-5.5 -86.5 Z" class="d-site" /></g>';
+        s += '<g id="siteG" transform="rotate(' + SITE_BRG + ')"><line x1="0" y1="-22" x2="0" y2="-76" class="d-course" /><path d="M0 -94 L5.5 -86.5 L0 -79 L-5.5 -86.5 Z" class="d-site" /></g>';
         // wind arrow (updated live)
         s += '<g id="windG"><line x1="0" y1="-96" x2="0" y2="-64" class="d-wind" /><path d="M0 -58 L-6.5 -71 L6.5 -71 Z" fill="#fff" /><circle cy="-97" r="3" fill="#fff" /></g>';
         dialSvg.innerHTML = '<g id="dial">' + s + '</g><path d="M0 -102 L-6.5 -115 L6.5 -115 Z" class="d-lubber" /><circle r="2.5" fill="rgba(255,255,255,.6)" />';
@@ -912,10 +920,8 @@
         heroTemp: $('heroTemp'), heroCond: $('heroCond'), heroSub: $('heroSub'),
         tideNow: $('tideNow'), tideTrend: $('tideTrend'),
         winCard: $('winCard'), winPill: $('winPill'), winCount: $('winCount'), winCountLabel: $('winCountLabel'), winFill: $('winFill'),
-        fragCount: $('fragCount'),
         windKt: $('windKt'), windSub: $('windSub'), gustKt: $('gustKt'), curKt: $('curKt'), curSub: $('curSub'), siteBrg: $('siteBrg'),
         ambDelta: $('ambDelta'), hourlySummary: $('hourlySummary'),
-        advTitle: $('advTitle'), advText: $('advText'),
         scrub: $('scrub'), scrubFill: $('scrubFill')
       };
 
@@ -929,8 +935,6 @@
       const scrubWin = $('scrubWin');
       scrubWin.style.left = (clamp((WIN_S - DOM0) / (DOM1 - DOM0), 0, 1) * 100) + '%';
       scrubWin.style.width = (clamp((WIN_E - WIN_S) / (DOM1 - DOM0), 0, 1) * 100) + '%';
-
-      let metrics = {};
 
       function update() {
         const m = state.sim, rt = performance.now() / 1000;
@@ -989,16 +993,7 @@
         }
         state.prevPhase = ph.key;
 
-        // Fragments
-        const N = CFG.fragments;
-        const placed = m < WIN_S ? 0 : (m >= WIN_E ? N : Math.min(N, Math.floor(prog * N + 1e-9)));
-        frags.forEach((c, i) => c.classList.toggle('on', i < placed));
-        if (placed > state.prevFrag && state.prevFrag >= 0 && placed - state.prevFrag <= 2 && placed > 0) {
-          const c = frags[placed - 1];
-          c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop');
-        }
-        state.prevFrag = placed;
-        setText(el.fragCount, placed + ' / ' + N);
+        const dst = updateDistance(m);
 
         // Tide
         setText(el.tideNow, tide.toFixed(2));
@@ -1016,7 +1011,6 @@
         setText(el.gustKt, gust.toFixed(1) + ' kt');
         setText(el.curKt, cur.toFixed(1) + ' kt');
         setText(el.curSub, cur < 0.15 ? 'slack' : (slope > 0 ? 'flood' : 'ebb'));
-        setText(el.siteBrg, deg3(SITE_BRG) + '°');
         windG.setAttribute('transform', 'rotate(' + wdir.toFixed(1) + ')');
 
         // Ambient
@@ -1033,57 +1027,10 @@
         const dA = air - curve(D.air, 5, 360);
         setText(el.ambDelta, (dA >= 0 ? '+' : '−') + Math.abs(dA).toFixed(1) + '° since 06:00');
 
-        // Advisory
-        metrics = { m: m, tide: tide, trend: trend, cur: cur, air: air, sea: sea, vis: vis, wind: wind, wdir: wdir, placed: placed, count: count };
-        renderAdvisory();
-
         // Scrubber
         if (!state.dragging) el.scrub.value = m;
         el.scrubFill.style.width = (clamp((m - DOM0) / (DOM1 - DOM0), 0, 1) * 100).toFixed(2) + '%';
       }
-
-      // =====================================================================
-      // 7. ADVISORY STRIP
-      // =====================================================================
-      const range12 = hm(WIN_S) + ' – ' + hm12(WIN_E);
-      const ADVISORIES = [
-        () => ({
-          title: 'Slack tide window · Sector 04',
-          text: (metrics.m < WIN_S ? 'Opens in ' + metrics.count + ' · ' + range12 + ' (' + CFG.windowLen + 'm)'
-            : metrics.m < WIN_E ? 'Open now · ' + metrics.count + ' left · ' + range12 + ' (' + CFG.windowLen + 'm)'
-            : 'Window closed · ' + range12 + ' (' + CFG.windowLen + 'm)') + ' · Target: ' + CFG.fragments + ' coral fragments'
-        }),
-        () => ({
-          title: 'Restoration target · Sector 04',
-          text: CFG.fragments + ' coral fragments outplanting grid · ' + metrics.placed + ' placed · Tide ' + metrics.tide.toFixed(2) + ' m ' + metrics.trend.toLowerCase().replace('▲ ', '').replace('▼ ', '')
-        }),
-        () => ({
-          title: 'Operational window · ' + CFG.windowLen + 'm',
-          text: range12 + ' optimal low-current window · Current ' + metrics.cur.toFixed(1) + ' kt · Minimal drift on reef shelf'
-        }),
-        () => ({
-          title: 'Site telemetry · Pramuka Island',
-          text: metrics.air.toFixed(1) + '°C air · ' + metrics.sea.toFixed(1) + '°C sea · ' + metrics.vis.toFixed(0) + ' m visibility · Wind ' + metrics.wind.toFixed(1) + ' kt ' + card16(metrics.wdir)
-        }),
-        () => ({
-          title: 'Tidal transition · After ' + hm(WIN_E),
-          text: 'Slack shifts to rising current after ' + hm(WIN_E) + ' · Complete all ' + CFG.fragments + ' fragments before then'
-        })
-      ];
-      function renderAdvisory() {
-        const a = ADVISORIES[state.advIdx]();
-        setText(el.advTitle, a.title);
-        setText(el.advText, a.text);
-      }
-      function nextAdvisory() {
-        state.advIdx = (state.advIdx + 1) % ADV_COUNT;
-        advDots.forEach((d, i) => d.classList.toggle('active', i === state.advIdx));
-        renderAdvisory();
-      }
-      $('advisoryCard').addEventListener('click', () => { nextAdvisory(); flash(); resetAdvTimer(); });
-      let advTimer;
-      function resetAdvTimer() { clearInterval(advTimer); advTimer = setInterval(nextAdvisory, 7000); }
-      resetAdvTimer();
 
       // =====================================================================
       // 8. CONTROLS
